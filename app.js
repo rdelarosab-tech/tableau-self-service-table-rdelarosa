@@ -127,6 +127,10 @@
 
       renderConfigFieldLists(fields, savedDims, savedMetrics);
 
+      // Limpiar buscador al recargar campos
+      const searchInput = document.getElementById('field-search');
+      if (searchInput) searchInput.value = '';
+
       loadingMsg.style.display  = 'none';
       fieldsPanel.style.display = 'block';
       saveBtn.disabled          = false;
@@ -145,17 +149,26 @@
     metricList.innerHTML = '';
 
     fields.forEach(field => {
-      const isMeasure  = field.role === 'measure';
-      const inDims     = savedDims.includes(field.name);
-      const inMetrics  = savedMetrics.includes(field.name);
-      const safeId     = field.name.replace(/[^a-zA-Z0-9]/g, '_');
+      const inDims    = savedDims.includes(field.name);
+      const inMetrics = savedMetrics.includes(field.name);
+      const safeId    = field.name.replace(/[^a-zA-Z0-9]/g, '_');
 
-      // Auto-sugerir clasificación según el rol del campo en Tableau
-      dimList.appendChild(buildConfigFieldItem(field, 'dim_' + safeId,
-        inDims || (!inDims && !inMetrics && !isMeasure)));
-      metricList.appendChild(buildConfigFieldItem(field, 'met_' + safeId,
-        inMetrics || (!inDims && !inMetrics && isMeasure)));
+      // Solo marcar si estaba guardado previamente — nunca auto-check
+      dimList.appendChild(buildConfigFieldItem(field, 'dim_' + safeId, inDims));
+      metricList.appendChild(buildConfigFieldItem(field, 'met_' + safeId, inMetrics));
     });
+
+    // Buscador: filtrar items en ambas listas
+    const searchInput = document.getElementById('field-search');
+    if (searchInput) {
+      searchInput.oninput = () => {
+        const q = searchInput.value.toLowerCase();
+        document.querySelectorAll('#config-fields-panel .field-item').forEach(item => {
+          const label = item.querySelector('label').textContent.toLowerCase();
+          item.style.display = label.includes(q) ? '' : 'none';
+        });
+      };
+    }
   }
 
   function buildConfigFieldItem(field, inputId, checked) {
