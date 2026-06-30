@@ -33,6 +33,40 @@
       <p id="error-msg"></p>
     </div>
 
+    <!-- Panel de configuración lateral -->
+    <div id="config-panel" class="config-panel" style="display:none">
+      <div class="config-panel-header">
+        <span>Configurar campos</span>
+        <button id="btn-config-close" class="btn btn-icon">✕</button>
+      </div>
+      <div class="config-panel-body">
+        <div class="worksheet-selector">
+          <label for="worksheet-select">Worksheet:</label>
+          <select id="worksheet-select"></select>
+        </div>
+        <div id="config-loading-msg" class="loading-msg">Cargando campos...</div>
+        <div id="config-error-msg" class="error-msg" style="display:none"></div>
+        <div id="config-fields-panel" style="display:none">
+          <div class="config-cols">
+            <div>
+              <h4>Dimensiones</h4>
+              <p class="col-hint">Campos categóricos</p>
+              <div id="dimensions-list" class="field-checklist"></div>
+            </div>
+            <div>
+              <h4>Métricas</h4>
+              <p class="col-hint">Campos numéricos</p>
+              <div id="metrics-list" class="field-checklist"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="config-panel-footer">
+        <button id="btn-config-cancel" class="btn btn-secondary">Cancelar</button>
+        <button id="btn-config-save" class="btn btn-primary" disabled>Guardar</button>
+      </div>
+    </div>
+
     <!-- Layout principal -->
     <div id="state-main" style="display:none">
       <div class="main-layout">

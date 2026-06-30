@@ -19,29 +19,131 @@
 
   /* ── Inicialización ─────────────────────────────────────── */
 
-  tableau.extensions.initializeAsync({ configure }).then(() => {
+  tableau.extensions.initializeAsync({ configure: openConfigPanel }).then(() => {
     loadConfiguration();
   }).catch(err => showState('error', 'Error al inicializar la extensión: ' + err.message));
 
-  function configure() {
-    openConfigDialog();
+  document.getElementById('btn-config').addEventListener('click', openConfigPanel);
+  document.getElementById('btn-config-close').addEventListener('click', closeConfigPanel);
+  document.getElementById('btn-config-cancel').addEventListener('click', closeConfigPanel);
+  document.getElementById('btn-config-save').addEventListener('click', saveConfig);
+
+  function openConfigPanel() {
+    const panel = document.getElementById('config-panel');
+    panel.style.display = 'flex';
+    loadConfigFields();
   }
 
-  document.getElementById('btn-config').addEventListener('click', openConfigDialog);
+  function closeConfigPanel() {
+    document.getElementById('config-panel').style.display = 'none';
+  }
 
-  function openConfigDialog() {
-    const base = window.location.href.split('?')[0].split('#')[0];
-    const url  = base.endsWith('/') ? base + 'config.html'
-               : base.replace(/\/[^/]*$/, '/config.html');
-    tableau.extensions.ui.displayDialogAsync(url, '', { height: 520, width: 660 })
-      .then(result => {
-        if (result === 'saved') loadConfiguration();
-      })
-      .catch(err => {
-        if (err && err.errorCode !== window._tableau?.ErrorCodes?.DialogClosedByUser) {
-          showState('error', 'No se pudo abrir la configuración: ' + (err.message || err));
-        }
-      });
+  /* ── Cargar campos en el panel de config ────────────────── */
+
+  async function loadConfigFields() {
+    const loadingMsg   = document.getElementById('config-loading-msg');
+    const errorMsg     = document.getElementById('config-error-msg');
+    const fieldsPanel  = document.getElementById('config-fields-panel');
+    const saveBtn      = document.getElementById('btn-config-save');
+    const wsSelect     = document.getElementById('worksheet-select');
+
+    loadingMsg.style.display  = 'block';
+    errorMsg.style.display    = 'none';
+    fieldsPanel.style.display = 'none';
+    saveBtn.disabled          = true;
+
+    try {
+      const dashboard  = tableau.extensions.dashboardContent.dashboard;
+      const worksheets = dashboard.worksheets;
+
+      if (!worksheets.length) throw new Error('No hay worksheets en este dashboard.');
+
+      // Poblar selector de worksheets (solo la primera vez)
+      if (!wsSelect.options.length) {
+        worksheets.forEach(ws => {
+          const opt = document.createElement('option');
+          opt.value = ws.name;
+          opt.textContent = ws.name;
+          wsSelect.appendChild(opt);
+        });
+        const savedWs = tableau.extensions.settings.get('worksheetName');
+        if (savedWs) wsSelect.value = savedWs;
+        wsSelect.addEventListener('change', loadConfigFields);
+      }
+
+      const ws = worksheets.find(w => w.name === wsSelect.value) || worksheets[0];
+      const datasources = await ws.getDataSourcesAsync();
+      if (!datasources.length) throw new Error('No hay datasources en este worksheet.');
+
+      const fieldArrays = await Promise.all(datasources.map(ds => ds.getFieldsAsync()));
+      const fields = fieldArrays.flat().filter(f => !f.isHidden);
+
+      const savedDims    = JSON.parse(tableau.extensions.settings.get('dimensions') || '[]');
+      const savedMetrics = JSON.parse(tableau.extensions.settings.get('metrics')    || '[]');
+
+      renderConfigFieldLists(fields, savedDims, savedMetrics);
+
+      loadingMsg.style.display  = 'none';
+      fieldsPanel.style.display = 'block';
+      saveBtn.disabled          = false;
+
+    } catch (err) {
+      loadingMsg.style.display = 'none';
+      errorMsg.textContent     = err.message;
+      errorMsg.style.display   = 'block';
+    }
+  }
+
+  function renderConfigFieldLists(fields, savedDims, savedMetrics) {
+    const NUMERIC = new Set(['float', 'integer', 'real']);
+    const dimList    = document.getElementById('dimensions-list');
+    const metricList = document.getElementById('metrics-list');
+    dimList.innerHTML = '';
+    metricList.innerHTML = '';
+
+    fields.forEach(field => {
+      const isNumeric  = NUMERIC.has(field.dataType);
+      const inDims     = savedDims.includes(field.name);
+      const inMetrics  = savedMetrics.includes(field.name);
+      const safeId     = field.name.replace(/[^a-zA-Z0-9]/g, '_');
+
+      dimList.appendChild(buildConfigFieldItem(field, 'dim_' + safeId,
+        inDims || (!inDims && !inMetrics && !isNumeric)));
+      metricList.appendChild(buildConfigFieldItem(field, 'met_' + safeId,
+        inMetrics || (!inDims && !inMetrics && isNumeric)));
+    });
+  }
+
+  function buildConfigFieldItem(field, inputId, checked) {
+    const div = document.createElement('div');
+    div.className = 'field-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.id = inputId;
+    cb.dataset.fieldName = field.name; cb.checked = checked;
+    const label = document.createElement('label');
+    label.htmlFor = inputId; label.textContent = field.name;
+    const tag = document.createElement('span');
+    tag.className = 'field-type'; tag.textContent = field.dataType;
+    div.append(cb, label, tag);
+    return div;
+  }
+
+  async function saveConfig() {
+    const wsSelect = document.getElementById('worksheet-select');
+    const dims = Array.from(
+      document.querySelectorAll('#dimensions-list input:checked')
+    ).map(cb => cb.dataset.fieldName);
+    const metrics = Array.from(
+      document.querySelectorAll('#metrics-list input:checked')
+    ).map(cb => cb.dataset.fieldName);
+
+    tableau.extensions.settings.set('worksheetName', wsSelect.value);
+    tableau.extensions.settings.set('dimensions',    JSON.stringify(dims));
+    tableau.extensions.settings.set('metrics',       JSON.stringify(metrics));
+    await tableau.extensions.settings.saveAsync();
+
+    closeConfigPanel();
+    loadConfiguration();
   }
 
   /* ── Cargar configuración guardada ─────────────────────── */
