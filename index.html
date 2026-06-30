@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tabla de Autoservicio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="app">
+    <!-- Barra superior -->
+    <header class="top-bar">
+      <span class="app-title">Tabla de Autoservicio</span>
+      <button id="btn-config" class="btn btn-icon" title="Configurar campos">⚙ Configurar</button>
+    </header>
+
+    <!-- Estado: sin configurar -->
+    <div id="state-unconfigured" class="state-screen" style="display:none">
+      <div class="state-icon">📋</div>
+      <p>Haz clic en <strong>⚙ Configurar</strong> para definir los campos disponibles.</p>
+    </div>
+
+    <!-- Estado: cargando -->
+    <div id="state-loading" class="state-screen" style="display:none">
+      <div class="spinner"></div>
+      <p>Cargando datos...</p>
+    </div>
+
+    <!-- Estado: error -->
+    <div id="state-error" class="state-screen" style="display:none">
+      <div class="state-icon">⚠️</div>
+      <p id="error-msg"></p>
+    </div>
+
+    <!-- Layout principal -->
+    <div id="state-main" style="display:none">
+      <div class="main-layout">
+
+        <!-- Panel lateral: campos disponibles -->
+        <aside class="sidebar">
+          <div class="sidebar-section">
+            <h4 class="sidebar-title">Dimensiones</h4>
+            <div id="available-dimensions" class="chip-list"></div>
+          </div>
+          <div class="sidebar-section">
+            <h4 class="sidebar-title">Métricas</h4>
+            <div id="available-metrics" class="chip-list"></div>
+          </div>
+          <button id="btn-reset" class="btn btn-secondary btn-sm">Limpiar todo</button>
+        </aside>
+
+        <!-- Área derecha -->
+        <div class="content-area">
+
+          <!-- Zonas de drop -->
+          <div class="drop-zones">
+            <div class="drop-zone-wrapper">
+              <label class="drop-label">FILAS</label>
+              <div id="zone-rows" class="drop-zone" data-zone="rows">
+                <span class="drop-hint">Arrastra dimensiones aquí</span>
+              </div>
+            </div>
+            <div class="drop-zone-wrapper">
+              <label class="drop-label">COLUMNAS</label>
+              <div id="zone-columns" class="drop-zone" data-zone="columns">
+                <span class="drop-hint">Arrastra una dimensión aquí</span>
+              </div>
+            </div>
+            <div class="drop-zone-wrapper">
+              <label class="drop-label">MÉTRICAS</label>
+              <div id="zone-metrics" class="drop-zone" data-zone="metrics">
+                <span class="drop-hint">Arrastra métricas aquí</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla pivot -->
+          <div class="table-area">
+            <div id="table-placeholder" class="table-placeholder">
+              <p>Arrastra al menos una dimensión a Filas y una métrica para ver la tabla.</p>
+            </div>
+            <div id="table-wrapper" class="table-wrapper" style="display:none">
+              <table id="pivot-table" class="pivot-table"></table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tableau/extensions-api@1.12.0/lib/tableau.extensions.1.latest.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

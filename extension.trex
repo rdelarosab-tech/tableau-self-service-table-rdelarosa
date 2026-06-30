@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
+  <dashboard-extension id="com.example.selfservicetable" extension-version="1.0.0">
+    <default-locale>es_ES</default-locale>
+    <name resource-id="name"/>
+    <description>Tabla de autoservicio con dimensiones y métricas configurables</description>
+    <author name="Autor" email="autor@example.com" organization="Mi Organización" website="https://example.com"/>
+    <min-api-version>1.7</min-api-version>
+    <source-location>
+      <url>https://rdelarosab-tech.github.io/tableau-self-service-table-rdelarosa/index.html</url>
+    </source-location>
+    <icon>iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABhklEQVQ4T6WTv0oDQRDGf3t7FxJJTGIhFkIaC0GwsBIRwUoQwUYQxEIEwUIQwcpCEMHKQhDBwkIQwcJCEMHCQhDBwkIQwcJCEMHCQhDBysLCIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=</icon>
+    <permissions>
+      <permission>full data</permission>
+    </permissions>
+  </dashboard-extension>
+  <resources>
+    <resource id="name">
+      <text locale="es_ES">Tabla de Autoservicio</text>
+      <text locale="en_US">Self-Service Table</text>
+    </resource>
+  </resources>
+</manifest>
