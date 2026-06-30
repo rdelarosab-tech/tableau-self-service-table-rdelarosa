@@ -5,16 +5,32 @@
 
   /* ── Estado de la aplicación ────────────────────────────── */
 
+  const STYLE_DEFAULTS = {
+    title:        'Tabla de Autoservicio',
+    headerBg:     '#f0f2f8',
+    headerColor:  '#1e2330',
+    headerSize:   11,
+    headerBold:   true,
+    cellBg:       '#ffffff',
+    cellColor:    '#1e2330',
+    cellSize:     12,
+    metricsBold:  false,
+    zebra:        false,
+    zebraColor:   '#f5f6fa',
+    totalBg:      '#e8eaf4',
+    totalColor:   '#1e2330',
+  };
+
   const state = {
     worksheet:  null,
-    dimensions: [],   // campos disponibles (dimensiones)
-    metrics:    [],   // campos disponibles (métricas)
-    zones: {
-      rows:    [],    // chips en zona Filas
-      columns: [],    // chips en zona Columnas (máx. 1)
-      metrics: [],    // chips en zona Métricas
-    },
-    dragging: null,   // { name, type, fromZone } del chip en vuelo
+    dimensions: [],
+    metrics:    [],
+    zones: { rows: [], columns: [], metrics: [] },
+    selected:   null,
+    lastPivot:  null,
+    showRowTotals: true,
+    showColTotals: true,
+    style: { ...STYLE_DEFAULTS },
   };
 
   /* ── Inicialización ─────────────────────────────────────── */
@@ -28,9 +44,32 @@
   document.getElementById('btn-config-cancel').addEventListener('click', closeConfigPanel);
   document.getElementById('btn-config-save').addEventListener('click', saveConfig);
 
+  // Tabs
+  document.querySelectorAll('.config-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.config-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-fields').style.display     = tab.dataset.tab === 'fields'     ? 'flex' : 'none';
+      document.getElementById('tab-appearance').style.display = tab.dataset.tab === 'appearance' ? 'flex' : 'none';
+    });
+  });
+
+  // Apariencia: preview en tiempo real al cambiar cualquier control
+  const APPEAR_IDS = ['ap-title',
+                      'ap-header-bg','ap-header-color','ap-header-size','ap-header-bold',
+                      'ap-cell-bg','ap-cell-color','ap-cell-size','ap-metrics-bold',
+                      'ap-zebra','ap-zebra-color','ap-total-bg','ap-total-color'];
+  APPEAR_IDS.forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      syncStyleFromInputs();
+      applyTableStyles();
+    });
+  });
+
   function openConfigPanel() {
     const panel = document.getElementById('config-panel');
     panel.style.display = 'flex';
+    syncInputsFromStyle();
     loadConfigFields();
   }
 
@@ -72,11 +111,11 @@
       }
 
       const ws = worksheets.find(w => w.name === wsSelect.value) || worksheets[0];
-      const datasources = await ws.getDataSourcesAsync();
-      if (!datasources.length) throw new Error('No hay datasources en este worksheet.');
-
-      const fieldArrays = await Promise.all(datasources.map(ds => ds.getFieldsAsync()));
-      const fields = fieldArrays.flat().filter(f => !f.isHidden);
+      const summary = await ws.getSummaryDataAsync({ maxRows: 1, ignoreAliases: false });
+      const fields = summary.columns.map(c => ({
+        name:     c.fieldName,
+        dataType: inferType(summary.data[0] ? summary.data[0][summary.columns.indexOf(c)] : null),
+      }));
 
       const savedDims    = JSON.parse(tableau.extensions.settings.get('dimensions') || '[]');
       const savedMetrics = JSON.parse(tableau.extensions.settings.get('metrics')    || '[]');
@@ -92,6 +131,11 @@
       errorMsg.textContent     = err.message;
       errorMsg.style.display   = 'block';
     }
+  }
+
+  function inferType(cell) {
+    if (!cell) return 'string';
+    return typeof cell.value === 'number' ? 'float' : 'string';
   }
 
   function renderConfigFieldLists(fields, savedDims, savedMetrics) {
@@ -128,6 +172,71 @@
     return div;
   }
 
+  function syncStyleFromInputs() {
+    state.style = {
+      title:       document.getElementById('ap-title').value || 'Tabla de Autoservicio',
+      headerBg:    document.getElementById('ap-header-bg').value,
+      headerColor: document.getElementById('ap-header-color').value,
+      headerSize:  parseInt(document.getElementById('ap-header-size').value) || 11,
+      headerBold:  document.getElementById('ap-header-bold').checked,
+      cellBg:      document.getElementById('ap-cell-bg').value,
+      cellColor:   document.getElementById('ap-cell-color').value,
+      cellSize:    parseInt(document.getElementById('ap-cell-size').value) || 12,
+      metricsBold: document.getElementById('ap-metrics-bold').checked,
+      zebra:       document.getElementById('ap-zebra').checked,
+      zebraColor:  document.getElementById('ap-zebra-color').value,
+      totalBg:     document.getElementById('ap-total-bg').value,
+      totalColor:  document.getElementById('ap-total-color').value,
+    };
+  }
+
+  function syncInputsFromStyle() {
+    const s = state.style;
+    document.getElementById('ap-title').value            = s.title || 'Tabla de Autoservicio';
+    document.getElementById('ap-header-bg').value        = s.headerBg;
+    document.getElementById('ap-header-color').value     = s.headerColor;
+    document.getElementById('ap-header-size').value      = s.headerSize;
+    document.getElementById('ap-header-bold').checked    = s.headerBold;
+    document.getElementById('ap-cell-bg').value          = s.cellBg;
+    document.getElementById('ap-cell-color').value       = s.cellColor;
+    document.getElementById('ap-cell-size').value        = s.cellSize;
+    document.getElementById('ap-metrics-bold').checked   = s.metricsBold;
+    document.getElementById('ap-zebra').checked          = s.zebra;
+    document.getElementById('ap-zebra-color').value      = s.zebraColor;
+    document.getElementById('ap-total-bg').value         = s.totalBg;
+    document.getElementById('ap-total-color').value      = s.totalColor;
+  }
+
+  function applyTableStyles() {
+    let el = document.getElementById('dynamic-table-styles');
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'dynamic-table-styles';
+      document.head.appendChild(el);
+    }
+    const s = state.style;
+    document.querySelector('.app-title').textContent = s.title || 'Tabla de Autoservicio';
+    el.textContent = `
+      .pivot-table thead th {
+        background: ${s.headerBg} !important;
+        color: ${s.headerColor} !important;
+        font-size: ${s.headerSize}px !important;
+        font-weight: ${s.headerBold ? '700' : '400'} !important;
+      }
+      .pivot-table tbody td {
+        background: ${s.cellBg};
+        color: ${s.cellColor} !important;
+        font-size: ${s.cellSize}px !important;
+      }
+      ${s.metricsBold ? '.pivot-table tbody .cell-metric { font-weight: 700 !important; }' : ''}
+      ${s.zebra ? `.pivot-table tbody tr:nth-child(even) td { background: ${s.zebraColor} !important; }` : ''}
+      .pivot-table .cell-total, .pivot-table tfoot td {
+        background: ${s.totalBg} !important;
+        color: ${s.totalColor} !important;
+      }
+    `;
+  }
+
   async function saveConfig() {
     const wsSelect = document.getElementById('worksheet-select');
     const dims = Array.from(
@@ -137,9 +246,11 @@
       document.querySelectorAll('#metrics-list input:checked')
     ).map(cb => cb.dataset.fieldName);
 
+    syncStyleFromInputs();
     tableau.extensions.settings.set('worksheetName', wsSelect.value);
     tableau.extensions.settings.set('dimensions',    JSON.stringify(dims));
     tableau.extensions.settings.set('metrics',       JSON.stringify(metrics));
+    tableau.extensions.settings.set('tableStyle',    JSON.stringify(state.style));
     await tableau.extensions.settings.saveAsync();
 
     closeConfigPanel();
@@ -149,9 +260,12 @@
   /* ── Cargar configuración guardada ─────────────────────── */
 
   function loadConfiguration() {
-    const dims    = JSON.parse(tableau.extensions.settings.get('dimensions')    || '[]');
-    const metrics = JSON.parse(tableau.extensions.settings.get('metrics')       || '[]');
+    const dims    = JSON.parse(tableau.extensions.settings.get('dimensions')  || '[]');
+    const metrics = JSON.parse(tableau.extensions.settings.get('metrics')    || '[]');
     const wsName  = tableau.extensions.settings.get('worksheetName');
+    const saved   = JSON.parse(tableau.extensions.settings.get('tableStyle') || 'null');
+    if (saved) state.style = { ...STYLE_DEFAULTS, ...saved };
+    applyTableStyles();
 
     if (!dims.length && !metrics.length) {
       showState('unconfigured');
@@ -230,11 +344,13 @@
   function buildChip(name, type, fromZone) {
     const chip = document.createElement('div');
     chip.className = `chip chip-${type}`;
-    chip.draggable = true;
     chip.dataset.name     = name;
     chip.dataset.type     = type;
     chip.dataset.fromZone = fromZone;
     chip.textContent      = name;
+    chip.title            = fromZone === 'sidebar' ? 'Clic para seleccionar, luego clic en la zona destino' : '';
+
+    chip.addEventListener('click', e => onChipClick(e, name, type, fromZone));
 
     if (fromZone !== 'sidebar') {
       const removeBtn = document.createElement('button');
@@ -248,72 +364,105 @@
       chip.appendChild(removeBtn);
     }
 
-    chip.addEventListener('dragstart', onDragStart);
-    chip.addEventListener('dragend',   onDragEnd);
     return chip;
   }
 
-  /* ── Drag & Drop ────────────────────────────────────────── */
+  /* ── Selección por clic ─────────────────────────────────── */
 
-  function onDragStart(e) {
-    state.dragging = {
-      name:     e.currentTarget.dataset.name,
-      type:     e.currentTarget.dataset.type,
-      fromZone: e.currentTarget.dataset.fromZone,
-    };
-    e.currentTarget.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
+  function onChipClick(e, name, type, fromZone) {
+    e.stopPropagation();
+
+    // Si ya está seleccionado, deseleccionar
+    if (state.selected && state.selected.name === name && state.selected.fromZone === fromZone) {
+      clearSelection();
+      return;
+    }
+    state.selected = { name, type, fromZone };
+    updateSelectionUI();
   }
 
-  function onDragEnd(e) {
-    e.currentTarget.classList.remove('dragging');
-    state.dragging = null;
+  function clearSelection() {
+    state.selected = null;
+    updateSelectionUI();
   }
 
-  // Registrar listeners en las zonas drop
+  function updateSelectionUI() {
+    const sel = state.selected;
+
+    // Resaltar chip seleccionado
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+    if (sel) {
+      document.querySelectorAll('.chip').forEach(c => {
+        if (c.dataset.name === sel.name && c.dataset.fromZone === sel.fromZone) {
+          c.classList.add('selected');
+        }
+      });
+    }
+
+    // Resaltar zonas compatibles
+    ['rows', 'columns', 'metrics'].forEach(zone => {
+      const el = document.getElementById('zone-' + zone);
+      el.classList.remove('zone-ready', 'zone-incompatible');
+      if (!sel) return;
+
+      const compatible =
+        (zone === 'metrics' && sel.type === 'metric') ||
+        (zone === 'rows'    && sel.type === 'dimension') ||
+        (zone === 'columns' && sel.type === 'dimension');
+
+      el.classList.add(compatible ? 'zone-ready' : 'zone-incompatible');
+    });
+  }
+
+  // Clic en zona para colocar el chip seleccionado
   ['rows', 'columns', 'metrics'].forEach(zone => {
     const el = document.getElementById('zone-' + zone);
-    el.addEventListener('dragover',  e => { e.preventDefault(); el.classList.add('drag-over'); });
-    el.addEventListener('dragleave', ()  => el.classList.remove('drag-over'));
-    el.addEventListener('drop',      e  => onDrop(e, zone));
+    el.addEventListener('click', () => {
+      const sel = state.selected;
+      if (!sel) return;
+
+      const { name, type, fromZone } = sel;
+
+      // Validar compatibilidad
+      if (zone === 'metrics' && type !== 'metric')    return;
+      if (zone === 'rows'    && type !== 'dimension') return;
+      if (zone === 'columns' && type !== 'dimension') return;
+
+      // Columnas solo admite 1 dimensión
+      if (zone === 'columns' && state.zones.columns.length >= 1) return;
+
+      // Quitar de zona origen si venía de una zona
+      if (fromZone !== 'sidebar') {
+        state.zones[fromZone] = state.zones[fromZone].filter(i => i.name !== name);
+      }
+
+      // Añadir a destino (evitar duplicados)
+      if (!state.zones[zone].find(i => i.name === name)) {
+        state.zones[zone].push({ name, type });
+      }
+
+      clearSelection();
+      refresh();
+    });
   });
 
-  function onDrop(e, targetZone) {
-    e.preventDefault();
-    document.getElementById('zone-' + targetZone).classList.remove('drag-over');
-
-    const { name, type, fromZone } = state.dragging || {};
-    if (!name) return;
-
-    // Validaciones de zona
-    if (targetZone === 'metrics'          && type !== 'metric')    return;
-    if (targetZone === 'rows'             && type !== 'dimension') return;
-    if (targetZone === 'columns'          && type !== 'dimension') return;
-
-    // Columnas solo admite 1 dimensión
-    if (targetZone === 'columns' && state.zones.columns.length >= 1) return;
-
-    // Si ya está en esa zona, no hacer nada
-    if (fromZone === targetZone) return;
-
-    // Quitar de origen
-    if (fromZone !== 'sidebar') {
-      state.zones[fromZone] = state.zones[fromZone].filter(i => i.name !== name);
-    }
-
-    // Añadir a destino (evitar duplicados)
-    if (!state.zones[targetZone].find(i => i.name === name)) {
-      state.zones[targetZone].push({ name, type });
-    }
-
-    refresh();
-  }
+  // Clic fuera de chips/zonas → deseleccionar
+  document.addEventListener('click', clearSelection);
 
   /* ── Botón reset ────────────────────────────────────────── */
 
   document.getElementById('btn-reset').addEventListener('click', () => {
     state.zones = { rows: [], columns: [], metrics: [] };
     refresh();
+  });
+
+  document.getElementById('chk-row-totals').addEventListener('change', e => {
+    state.showRowTotals = e.target.checked;
+    renderTable();
+  });
+  document.getElementById('chk-col-totals').addEventListener('change', e => {
+    state.showColTotals = e.target.checked;
+    renderTable();
   });
 
   /* ── Quitar chip de zona ────────────────────────────────── */
@@ -370,7 +519,9 @@
       }
 
       const pivotData = buildPivot(rows, colIndex, rowDims, colDim, metrics);
-      renderPivotTable(pivotData, rowDims, colDim, metrics);
+      state.lastPivot = { pivotData, rowDims, colDim, metrics };
+      renderPivotTable(pivotData, rowDims, colDim, metrics, state.showRowTotals, state.showColTotals);
+      makeColumnsResizable(document.getElementById('pivot-table'));
       wrapper.style.display = 'block';
 
     } catch (err) {
@@ -416,7 +567,7 @@
 
   /* ── Render HTML de la tabla ────────────────────────────── */
 
-  function renderPivotTable({ groupMap, colValues }, rowDims, colDim, metrics) {
+  function renderPivotTable({ groupMap, colValues }, rowDims, colDim, metrics, showRowTotals, showColTotals) {
     const table = document.getElementById('pivot-table');
     table.innerHTML = '';
 
@@ -439,11 +590,13 @@
       });
 
       // Total column group
-      const thTotal = document.createElement('th');
-      thTotal.textContent = 'Total';
-      thTotal.colSpan     = metrics.length;
-      thTotal.className   = 'header-colgroup';
-      row1.appendChild(thTotal);
+      if (showRowTotals) {
+        const thTotal = document.createElement('th');
+        thTotal.textContent = 'Total';
+        thTotal.colSpan     = metrics.length;
+        thTotal.className   = 'header-colgroup';
+        row1.appendChild(thTotal);
+      }
 
       // Fila 2: nombres de dimensiones de fila + nombres de métricas repetidos
       const row2 = thead.insertRow();
@@ -452,7 +605,8 @@
         th.textContent = d;
         row2.appendChild(th);
       });
-      [...colValues, 'Total'].forEach(() => {
+      const colGroups = showRowTotals ? [...colValues, 'Total'] : colValues;
+      colGroups.forEach(() => {
         metrics.forEach(m => {
           const th = document.createElement('th');
           th.textContent = m;
@@ -513,11 +667,13 @@
           });
         });
         // Total de la fila
-        metrics.forEach(m => {
-          const td = tr.insertCell();
-          td.className   = 'cell-metric cell-total';
-          td.textContent = formatNumber(rowTotal[m]);
-        });
+        if (showRowTotals) {
+          metrics.forEach(m => {
+            const td = tr.insertCell();
+            td.className   = 'cell-metric cell-total';
+            td.textContent = formatNumber(rowTotal[m]);
+          });
+        }
 
       } else {
         const acc = cvMap.get('__total__') || {};
@@ -532,6 +688,7 @@
     });
 
     // ── Footer con totales ──
+    if (!showColTotals) return;
     const footerRow = tfoot.insertRow();
     const tdLabel   = footerRow.insertCell();
     tdLabel.textContent = 'Total';
@@ -547,27 +704,254 @@
           td.textContent = formatNumber(ct[m] || 0);
         });
       });
+      // Gran total esquina: solo si ambos totales están activos
+      if (showRowTotals) {
+        metrics.forEach(m => {
+          const td = footerRow.insertCell();
+          td.className   = 'cell-metric cell-total';
+          td.textContent = formatNumber(grandTotal[m] || 0);
+        });
+      }
+    } else {
+      metrics.forEach(m => {
+        const td = footerRow.insertCell();
+        td.className   = 'cell-metric cell-total';
+        td.textContent = formatNumber(grandTotal[m] || 0);
+      });
     }
-
-    metrics.forEach(m => {
-      const td = footerRow.insertCell();
-      td.className   = 'cell-metric cell-total';
-      td.textContent = formatNumber(grandTotal[m] || 0);
-    });
   }
 
-  /* ── Exportar a Excel ───────────────────────────────────── */
+  /* ── Exportar a Excel (ExcelJS) ─────────────────────────── */
 
-  document.getElementById('btn-export').addEventListener('click', () => {
-    const table = document.getElementById('pivot-table');
-    const wb    = XLSX.utils.table_to_book(table, { sheet: 'Tabla' });
+  document.getElementById('btn-export').addEventListener('click', exportToExcel);
 
-    // Nombre de archivo con fecha
-    const now  = new Date();
-    const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const rows = state.zones.rows.map(i => i.name).join('_') || 'tabla';
-    XLSX.writeFile(wb, `${rows}_${date}.xlsx`);
-  });
+  function hexToARGB(hex) {
+    return 'FF' + hex.replace('#', '').toUpperCase().padStart(6, '0');
+  }
+
+  function applyHeaderStyle(cell, s) {
+    cell.font = { bold: s.headerBold, size: s.headerSize, color: { argb: hexToARGB(s.headerColor) } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToARGB(s.headerBg) } };
+    cell.border = {
+      bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      right:  { style: 'thin', color: { argb: 'FFCCCCCC' } },
+    };
+  }
+
+  function applyDataStyle(cell, s, isMetric, isEven) {
+    cell.font = { bold: isMetric && s.metricsBold, size: s.cellSize, color: { argb: hexToARGB(s.cellColor) } };
+    const bg  = isEven && s.zebra ? s.zebraColor : s.cellBg;
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToARGB(bg) } };
+    cell.border = { right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
+    if (isMetric) cell.alignment = { horizontal: 'right' };
+  }
+
+  function applyTotalStyle(cell, s, isMetric) {
+    cell.font   = { bold: true, size: s.cellSize, color: { argb: hexToARGB(s.totalColor) } };
+    cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToARGB(s.totalBg) } };
+    cell.border = {
+      top:   { style: 'medium', color: { argb: 'FFAAAAAA' } },
+      right: { style: 'thin',   color: { argb: 'FFCCCCCC' } },
+    };
+    if (isMetric) cell.alignment = { horizontal: 'right' };
+  }
+
+  async function exportToExcel() {
+    if (!state.lastPivot) return;
+    const { pivotData, rowDims, colDim, metrics } = state.lastPivot;
+    const { groupMap, colValues } = pivotData;
+    const s   = state.style;
+    const wb  = new ExcelJS.Workbook();
+    const ws  = wb.addWorksheet('Tabla');
+    let curRow = 1;
+    const nDim = rowDims.length;
+
+    // ── Headers ──
+    if (colDim && colValues.length) {
+      // Fila 1: celdas vacías + grupos de colVal + Total
+      let col = nDim + 1;
+      for (let i = 1; i <= nDim; i++) applyHeaderStyle(ws.getRow(curRow).getCell(i), s);
+      colValues.forEach(cv => {
+        const cell = ws.getRow(curRow).getCell(col);
+        cell.value = cv;
+        applyHeaderStyle(cell, s);
+        cell.alignment = { horizontal: 'center' };
+        if (metrics.length > 1) ws.mergeCells(curRow, col, curRow, col + metrics.length - 1);
+        col += metrics.length;
+      });
+      if (state.showRowTotals) {
+        const cell = ws.getRow(curRow).getCell(col);
+        cell.value = 'Total';
+        applyHeaderStyle(cell, s);
+        cell.alignment = { horizontal: 'center' };
+        if (metrics.length > 1) ws.mergeCells(curRow, col, curRow, col + metrics.length - 1);
+      }
+      curRow++;
+
+      // Fila 2: nombres dim + métricas repetidas
+      const groups = state.showRowTotals ? [...colValues, '__total__'] : colValues;
+      let col2 = nDim + 1;
+      rowDims.forEach((d, i) => {
+        const cell = ws.getRow(curRow).getCell(i + 1);
+        cell.value = d; applyHeaderStyle(cell, s);
+      });
+      groups.forEach(() => metrics.forEach(m => {
+        const cell = ws.getRow(curRow).getCell(col2++);
+        cell.value = m; applyHeaderStyle(cell, s); cell.alignment = { horizontal: 'right' };
+      }));
+      curRow++;
+
+    } else {
+      rowDims.forEach((d, i) => {
+        const cell = ws.getRow(curRow).getCell(i + 1);
+        cell.value = d; applyHeaderStyle(cell, s);
+      });
+      metrics.forEach((m, i) => {
+        const cell = ws.getRow(curRow).getCell(nDim + i + 1);
+        cell.value = m; applyHeaderStyle(cell, s); cell.alignment = { horizontal: 'right' };
+      });
+      curRow++;
+    }
+
+    // ── Filas de datos ──
+    let rowIdx = 0;
+    const grandTotal = {}; const grandColTotals = {};
+    metrics.forEach(m => { grandTotal[m] = 0; });
+
+    groupMap.forEach(({ dims, colValues: cvMap }) => {
+      const isEven = rowIdx % 2 === 1;
+      let col = nDim + 1;
+      rowDims.forEach((d, i) => {
+        const cell = ws.getRow(curRow).getCell(i + 1);
+        cell.value = dims[d]; applyDataStyle(cell, s, false, isEven);
+      });
+
+      if (colDim && colValues.length) {
+        const rowTotal = {}; metrics.forEach(m => { rowTotal[m] = 0; });
+        colValues.forEach(cv => {
+          if (!grandColTotals[cv]) { grandColTotals[cv] = {}; metrics.forEach(m => { grandColTotals[cv][m] = 0; }); }
+          const acc = cvMap.get(cv) || {};
+          metrics.forEach(m => {
+            const val = acc[m] || 0;
+            rowTotal[m] += val; grandColTotals[cv][m] += val; grandTotal[m] += val;
+            const cell = ws.getRow(curRow).getCell(col++);
+            cell.value = val; applyDataStyle(cell, s, true, isEven);
+          });
+        });
+        if (state.showRowTotals) {
+          metrics.forEach(m => {
+            const cell = ws.getRow(curRow).getCell(col++);
+            cell.value = rowTotal[m]; applyTotalStyle(cell, s, true);
+          });
+        }
+      } else {
+        const acc = cvMap.get('__total__') || {};
+        metrics.forEach(m => {
+          const val = acc[m] || 0; grandTotal[m] += val;
+          const cell = ws.getRow(curRow).getCell(col++);
+          cell.value = val; applyDataStyle(cell, s, true, isEven);
+        });
+      }
+      curRow++; rowIdx++;
+    });
+
+    // ── Footer ──
+    if (state.showColTotals) {
+      let col = nDim + 1;
+      const lc = ws.getRow(curRow).getCell(1);
+      lc.value = 'Total'; applyTotalStyle(lc, s, false);
+      if (nDim > 1) ws.mergeCells(curRow, 1, curRow, nDim);
+
+      if (colDim && colValues.length) {
+        colValues.forEach(cv => {
+          metrics.forEach(m => {
+            const cell = ws.getRow(curRow).getCell(col++);
+            cell.value = (grandColTotals[cv] || {})[m] || 0; applyTotalStyle(cell, s, true);
+          });
+        });
+        if (state.showRowTotals) {
+          metrics.forEach(m => {
+            const cell = ws.getRow(curRow).getCell(col++);
+            cell.value = grandTotal[m] || 0; applyTotalStyle(cell, s, true);
+          });
+        }
+      } else {
+        metrics.forEach(m => {
+          const cell = ws.getRow(curRow).getCell(col++);
+          cell.value = grandTotal[m] || 0; applyTotalStyle(cell, s, true);
+        });
+      }
+    }
+
+    // ── Anchos de columna ──
+    const table  = document.getElementById('pivot-table');
+    const colEls = table.querySelectorAll('colgroup col');
+    const ths    = table.querySelectorAll('thead tr:last-child th');
+    const src    = colEls.length ? Array.from(colEls) : Array.from(ths);
+    src.forEach((el, i) => {
+      ws.getColumn(i + 1).width = Math.max(8, Math.round((parseInt(el.style.width) || el.offsetWidth) / 7));
+    });
+
+    // ── Descargar ──
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url    = URL.createObjectURL(blob);
+    const a      = document.createElement('a');
+    const now    = new Date();
+    const date   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    a.download   = `${state.zones.rows.map(i => i.name).join('_') || 'tabla'}_${date}.xlsx`;
+    a.href = url;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  /* ── Redimensionar columnas ─────────────────────────────── */
+
+  function makeColumnsResizable(table) {
+    const lastRowThs = Array.from(table.querySelectorAll('thead tr:last-child th'));
+
+    // Crear colgroup con una <col> por columna hoja (sin colspan)
+    let colgroup = table.querySelector('colgroup');
+    if (colgroup) colgroup.remove();
+    colgroup = document.createElement('colgroup');
+    table.insertBefore(colgroup, table.firstChild);
+
+    const cols = lastRowThs.map(th => {
+      const col = document.createElement('col');
+      col.style.width = Math.max(60, th.offsetWidth) + 'px';
+      colgroup.appendChild(col);
+      return col;
+    });
+
+    // Añadir handle a cada th de la última fila
+    lastRowThs.forEach((th, i) => {
+      // Evitar duplicados al re-renderizar
+      if (th.querySelector('.col-resizer')) return;
+      const handle = document.createElement('div');
+      handle.className = 'col-resizer';
+      th.appendChild(handle);
+
+      let startX, startW;
+      handle.addEventListener('mousedown', e => {
+        e.preventDefault();
+        startX = e.clientX;
+        startW = parseInt(cols[i].style.width) || th.offsetWidth;
+        handle.classList.add('resizing');
+
+        const onMove = e => {
+          const newW = Math.max(40, startW + (e.clientX - startX));
+          cols[i].style.width = newW + 'px';
+        };
+        const onUp = () => {
+          handle.classList.remove('resizing');
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    });
+  }
 
   /* ── Utilidades ─────────────────────────────────────────── */
 

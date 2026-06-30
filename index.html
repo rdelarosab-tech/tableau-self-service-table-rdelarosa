@@ -37,10 +37,18 @@
     <!-- Panel de configuración lateral -->
     <div id="config-panel" class="config-panel" style="display:none">
       <div class="config-panel-header">
-        <span>Configurar campos</span>
+        <span>Configuración</span>
         <button id="btn-config-close" class="btn btn-icon">✕</button>
       </div>
-      <div class="config-panel-body">
+
+      <!-- Pestañas -->
+      <div class="config-tabs">
+        <button class="config-tab active" data-tab="fields">Campos</button>
+        <button class="config-tab" data-tab="appearance">Apariencia</button>
+      </div>
+
+      <!-- Tab: Campos -->
+      <div id="tab-fields" class="config-panel-body">
         <div class="worksheet-selector">
           <label for="worksheet-select">Worksheet:</label>
           <select id="worksheet-select"></select>
@@ -62,6 +70,92 @@
           </div>
         </div>
       </div>
+
+      <!-- Tab: Apariencia -->
+      <div id="tab-appearance" class="config-panel-body" style="display:none">
+        <div class="appearance-grid">
+
+          <div class="appear-section">
+            <h4>Cabecera</h4>
+            <div class="appear-row">
+              <label>Color fondo</label>
+              <input type="color" id="ap-header-bg" value="#f0f2f8">
+            </div>
+            <div class="appear-row">
+              <label>Color texto</label>
+              <input type="color" id="ap-header-color" value="#1e2330">
+            </div>
+            <div class="appear-row">
+              <label>Tamaño letra</label>
+              <div class="appear-inline">
+                <input type="number" id="ap-header-size" value="11" min="8" max="24" step="1">
+                <span>px</span>
+              </div>
+            </div>
+            <div class="appear-row">
+              <label>Negrita</label>
+              <input type="checkbox" id="ap-header-bold" checked>
+            </div>
+          </div>
+
+          <div class="appear-section">
+            <h4>Celdas</h4>
+            <div class="appear-row">
+              <label>Color fondo</label>
+              <input type="color" id="ap-cell-bg" value="#ffffff">
+            </div>
+            <div class="appear-row">
+              <label>Color texto</label>
+              <input type="color" id="ap-cell-color" value="#1e2330">
+            </div>
+            <div class="appear-row">
+              <label>Tamaño letra</label>
+              <div class="appear-inline">
+                <input type="number" id="ap-cell-size" value="12" min="8" max="24" step="1">
+                <span>px</span>
+              </div>
+            </div>
+            <div class="appear-row">
+              <label>Negrita métricas</label>
+              <input type="checkbox" id="ap-metrics-bold">
+            </div>
+          </div>
+
+          <div class="appear-section">
+            <h4>Filas alternas (pijama)</h4>
+            <div class="appear-row">
+              <label>Activar</label>
+              <input type="checkbox" id="ap-zebra">
+            </div>
+            <div class="appear-row">
+              <label>Color alterno</label>
+              <input type="color" id="ap-zebra-color" value="#f5f6fa">
+            </div>
+          </div>
+
+          <div class="appear-section">
+            <h4>Título</h4>
+            <div class="appear-row">
+              <label>Texto</label>
+              <input type="text" id="ap-title" value="Tabla de Autoservicio" style="flex:1;padding:4px 6px;border:1px solid var(--color-border);border-radius:4px;font-size:12px;">
+            </div>
+          </div>
+
+          <div class="appear-section">
+            <h4>Totales</h4>
+            <div class="appear-row">
+              <label>Color fondo totales</label>
+              <input type="color" id="ap-total-bg" value="#e8eaf4">
+            </div>
+            <div class="appear-row">
+              <label>Color texto totales</label>
+              <input type="color" id="ap-total-color" value="#1e2330">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       <div class="config-panel-footer">
         <button id="btn-config-cancel" class="btn btn-secondary">Cancelar</button>
         <button id="btn-config-save" class="btn btn-primary" disabled>Guardar</button>
@@ -83,6 +177,16 @@
             <div id="available-metrics" class="chip-list"></div>
           </div>
           <button id="btn-reset" class="btn btn-secondary btn-sm">Limpiar todo</button>
+          <div class="totals-toggles">
+            <label class="toggle-item">
+              <input type="checkbox" id="chk-row-totals" checked>
+              Totales fila
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="chk-col-totals" checked>
+              Totales columna
+            </label>
+          </div>
         </aside>
 
         <!-- Área derecha -->
@@ -93,19 +197,19 @@
             <div class="drop-zone-wrapper">
               <label class="drop-label">FILAS</label>
               <div id="zone-rows" class="drop-zone" data-zone="rows">
-                <span class="drop-hint">Arrastra dimensiones aquí</span>
+                <span class="drop-hint">Selecciona un campo y haz clic aquí</span>
               </div>
             </div>
             <div class="drop-zone-wrapper">
               <label class="drop-label">COLUMNAS</label>
               <div id="zone-columns" class="drop-zone" data-zone="columns">
-                <span class="drop-hint">Arrastra una dimensión aquí</span>
+                <span class="drop-hint">Selecciona un campo y haz clic aquí</span>
               </div>
             </div>
             <div class="drop-zone-wrapper">
               <label class="drop-label">MÉTRICAS</label>
               <div id="zone-metrics" class="drop-zone" data-zone="metrics">
-                <span class="drop-hint">Arrastra métricas aquí</span>
+                <span class="drop-hint">Selecciona un campo y haz clic aquí</span>
               </div>
             </div>
           </div>
@@ -142,8 +246,8 @@
       showJsError('Promise rechazada: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
     });
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/@tableau/extensions-api@1.12.0/lib/tableau.extensions.1.latest.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="tableau.extensions.1.latest.js"></script>
+  <script src="exceljs.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
