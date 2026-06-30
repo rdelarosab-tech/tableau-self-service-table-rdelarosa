@@ -545,7 +545,7 @@
 
       // Fallback: summary data del worksheet (siempre disponible)
       if (!usedUnderlying) {
-        const sd = await state.worksheet.getSummaryDataAsync({ maxRows: 0, ignoreAliases: false });
+        const sd = await state.worksheet.getSummaryDataAsync({ maxRows: 0, ignoreAliases: false, includeAllColumns: true });
         columns  = sd.columns;
         rows     = sd.data;
 
