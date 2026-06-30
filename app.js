@@ -30,12 +30,18 @@
   document.getElementById('btn-config').addEventListener('click', openConfigDialog);
 
   function openConfigDialog() {
-    const url = window.location.href.replace('index.html', 'config.html');
+    const base = window.location.href.split('?')[0].split('#')[0];
+    const url  = base.endsWith('/') ? base + 'config.html'
+               : base.replace(/\/[^/]*$/, '/config.html');
     tableau.extensions.ui.displayDialogAsync(url, '', { height: 520, width: 660 })
       .then(result => {
         if (result === 'saved') loadConfiguration();
       })
-      .catch(() => {}); // usuario cerró el diálogo
+      .catch(err => {
+        if (err && err.errorCode !== window._tableau?.ErrorCodes?.DialogClosedByUser) {
+          showState('error', 'No se pudo abrir la configuración: ' + (err.message || err));
+        }
+      });
   }
 
   /* ── Cargar configuración guardada ─────────────────────── */
