@@ -155,6 +155,7 @@
 
     if (!dims.length && !metrics.length) {
       showState('unconfigured');
+      openConfigPanel();
       return;
     }
 

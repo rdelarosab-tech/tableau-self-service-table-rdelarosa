@@ -8,11 +8,12 @@
 </head>
 <body>
 
+  <div id="js-error-banner" style="display:none;background:#c0392b;color:#fff;font-size:12px;padding:8px 14px;position:fixed;top:0;left:0;right:0;z-index:999"></div>
   <div id="app">
     <!-- Barra superior -->
     <header class="top-bar">
       <span class="app-title">Tabla de Autoservicio</span>
-      <button id="btn-config" class="btn btn-icon" title="Configurar campos">⚙ Configurar</button>
+      <button id="btn-config" class="btn btn-icon" title="Configurar campos" onclick="document.getElementById('config-panel').style.display='flex'">⚙ Configurar</button>
     </header>
 
     <!-- Estado: sin configurar -->
@@ -127,6 +128,20 @@
     </div>
   </div>
 
+  <script>
+    function showJsError(msg) {
+      var b = document.getElementById('js-error-banner');
+      if (!b) return;
+      b.innerHTML += '<div>⚠ ' + msg + '</div>';
+      b.style.display = 'block';
+    }
+    window.onerror = function(msg, src, line) {
+      showJsError(msg + ' — ' + (src || '').split('/').pop() + ':' + line);
+    };
+    window.addEventListener('unhandledrejection', function(e) {
+      showJsError('Promise rechazada: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+    });
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/@tableau/extensions-api@1.12.0/lib/tableau.extensions.1.latest.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>
