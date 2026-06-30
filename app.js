@@ -500,42 +500,57 @@
     showState('loading');
 
     try {
-      // Acceder al datasource directamente — solo se piden las columnas seleccionadas
-      const datasources = await state.worksheet.getDataSourcesAsync();
-      if (!datasources.length) throw new Error('No hay datasources conectados.');
-      const ds = datasources[0];
-
-      // Construir mapa nombre → id para localizar los campos
-      const fieldMap = new Map(ds.fields.map(f => [f.name, f.id]));
-
       const allRequired = [...rowDims, ...(colDim ? [colDim] : []), ...metrics];
-      const missing     = allRequired.filter(n => !fieldMap.has(n));
-      if (missing.length) {
-        showState('error', `Campos no encontrados en el datasource: ${missing.join(', ')}. Reconfigura la extensión.`);
-        return;
+      let columns, rows;
+
+      // Intento 1: underlying table data — pide solo las columnas seleccionadas al datasource
+      let usedUnderlying = false;
+      try {
+        const datasources = await state.worksheet.getDataSourcesAsync();
+        if (datasources.length) {
+          const ds       = datasources[0];
+          const fieldMap = new Map(ds.fields.map(f => [f.name, f.id]));
+          const colIds   = allRequired.map(n => fieldMap.get(n)).filter(Boolean);
+
+          if (colIds.length === allRequired.length) {
+            const tables = await state.worksheet.getUnderlyingTablesAsync();
+            if (tables.length) {
+              const dt = await state.worksheet.getUnderlyingTableDataAsync(tables[0].id, {
+                maxRows:              0,
+                ignoreAliases:        false,
+                ignoreSelection:      true,
+                includeAllColumns:    false,
+                columnsToIncludeById: colIds,
+              });
+              columns = dt.columns;
+              rows    = dt.data;
+              usedUnderlying = true;
+            }
+          }
+        }
+      } catch (_) { /* continuar con fallback */ }
+
+      // Fallback: summary data del worksheet (siempre disponible)
+      if (!usedUnderlying) {
+        const sd = await state.worksheet.getSummaryDataAsync({ maxRows: 0, ignoreAliases: false });
+        columns  = sd.columns;
+        rows     = sd.data;
+
+        const idx = {};
+        columns.forEach((c, i) => { idx[c.fieldName] = i; });
+        const missing = allRequired.filter(f => idx[f] === undefined);
+        if (missing.length) {
+          showState('error', `Campos no encontrados: ${missing.join(', ')}. Añádelos al worksheet o reconfigura.`);
+          return;
+        }
       }
-
-      // Obtener las tablas subyacentes del worksheet (gateway al datasource)
-      const tables = await state.worksheet.getUnderlyingTablesAsync();
-      if (!tables.length) throw new Error('No se encontraron tablas en el datasource.');
-      const tableId = tables[0].id;
-
-      // Pedir SOLO las columnas que el usuario ha seleccionado
-      const columnIds = allRequired.map(n => fieldMap.get(n));
-      const dataTable = await state.worksheet.getUnderlyingTableDataAsync(tableId, {
-        maxRows:              0,      // sin límite
-        ignoreAliases:        false,
-        ignoreSelection:      true,   // ignorar selección activa en el worksheet
-        includeAllColumns:    false,
-        columnsToIncludeById: columnIds,
-      });
 
       showState('main');
 
       const colIndex = {};
-      dataTable.columns.forEach((c, i) => { colIndex[c.fieldName] = i; });
+      columns.forEach((c, i) => { colIndex[c.fieldName] = i; });
 
-      const pivotData = buildPivot(dataTable.data, colIndex, rowDims, colDim, metrics);
+      const pivotData = buildPivot(rows, colIndex, rowDims, colDim, metrics);
       state.lastPivot = { pivotData, rowDims, colDim, metrics };
       renderPivotTable(pivotData, rowDims, colDim, metrics, state.showRowTotals, state.showColTotals);
       makeColumnsResizable(document.getElementById('pivot-table'));
