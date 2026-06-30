@@ -560,8 +560,7 @@
 
       showState('main');
 
-      const colIndex = {};
-      columns.forEach((c, i) => { colIndex[c.fieldName] = i; });
+      const colIndex = buildColIndex(columns);
 
       const pivotData = buildPivot(rows, colIndex, rowDims, colDim, metrics);
       state.lastPivot = { pivotData, rowDims, colDim, metrics };
@@ -574,6 +573,19 @@
     }
   }
 
+  /* ── Índice de columnas (tolerante a prefijos de agregación) ── */
+
+  function buildColIndex(columns) {
+    const idx = {};
+    const AGG = /^(SUM|AVG|MIN|MAX|CNT|CNTD|COUNT|AGG|ATTR|MEDIAN|STDEV?|VAR)\((.+)\)$/i;
+    columns.forEach((c, i) => {
+      idx[c.fieldName] = i;
+      const m = AGG.exec(c.fieldName);
+      if (m) idx[m[2]] = i; // nombre sin prefijo como alias
+    });
+    return idx;
+  }
+
   /* ── Lógica de pivot ────────────────────────────────────── */
 
   function buildPivot(rows, colIndex, rowDims, colDim, metrics) {
@@ -581,16 +593,20 @@
     const colValues = new Set(); // valores únicos de la dimensión de columnas
 
     rows.forEach(row => {
-      const rowKey = rowDims.map(d => String(row[colIndex[d]].formattedValue)).join('|||');
+      const cell = (name) => row[colIndex[name]];
+      const fv   = (name) => { const c = cell(name); return c != null ? c.formattedValue : ''; };
+      const nv   = (name) => { const c = cell(name); if (!c) return 0; return typeof c.value === 'number' ? c.value : parseFloat(c.value) || 0; };
+
+      const rowKey = rowDims.map(d => String(fv(d))).join('|||');
 
       if (!groupMap.has(rowKey)) {
         const dims = {};
-        rowDims.forEach(d => { dims[d] = row[colIndex[d]].formattedValue; });
+        rowDims.forEach(d => { dims[d] = fv(d); });
         groupMap.set(rowKey, { dims, colValues: new Map() });
       }
 
       const group = groupMap.get(rowKey);
-      const colVal = colDim ? String(row[colIndex[colDim]].formattedValue) : '__total__';
+      const colVal = colDim ? String(fv(colDim)) : '__total__';
 
       if (colDim) colValues.add(colVal);
 
@@ -602,8 +618,7 @@
 
       const acc = group.colValues.get(colVal);
       metrics.forEach(m => {
-        const raw = row[colIndex[m]].value;
-        acc[m] += typeof raw === 'number' ? raw : parseFloat(raw) || 0;
+        acc[m] += nv(m);
       });
     });
 
