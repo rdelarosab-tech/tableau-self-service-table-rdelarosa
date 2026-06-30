@@ -515,16 +515,17 @@
         return;
       }
 
-      // Obtener la tabla lógica del datasource
-      const tables = await ds.getLogicalTablesAsync();
+      // Obtener las tablas subyacentes del worksheet (gateway al datasource)
+      const tables = await state.worksheet.getUnderlyingTablesAsync();
       if (!tables.length) throw new Error('No se encontraron tablas en el datasource.');
       const tableId = tables[0].id;
 
       // Pedir SOLO las columnas que el usuario ha seleccionado
       const columnIds = allRequired.map(n => fieldMap.get(n));
-      const dataTable = await ds.getUnderlyingTableDataAsync(tableId, {
+      const dataTable = await state.worksheet.getUnderlyingTableDataAsync(tableId, {
         maxRows:              0,      // sin límite
         ignoreAliases:        false,
+        ignoreSelection:      true,   // ignorar selección activa en el worksheet
         includeAllColumns:    false,
         columnsToIncludeById: columnIds,
       });
