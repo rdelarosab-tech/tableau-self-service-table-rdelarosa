@@ -81,6 +81,9 @@
               <p>Arrastra al menos una dimensión a Filas y una métrica para ver la tabla.</p>
             </div>
             <div id="table-wrapper" class="table-wrapper" style="display:none">
+              <div class="table-toolbar">
+                <button id="btn-export" class="btn btn-secondary btn-sm">⬇ Exportar Excel</button>
+              </div>
               <table id="pivot-table" class="pivot-table"></table>
             </div>
           </div>
@@ -91,6 +94,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tableau/extensions-api@1.12.0/lib/tableau.extensions.1.latest.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

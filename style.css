@@ -128,6 +128,11 @@ html, body { height: 100%; font-family: var(--font); font-size: 13px; color: var
 /* ─── Table area ────────────────────────────────────────────── */
 .table-area { flex: 1; overflow: auto; padding: 14px; }
 
+.table-toolbar {
+  display: flex; justify-content: flex-end;
+  padding: 0 0 8px 0;
+}
+
 .table-placeholder {
   display: flex; align-items: center; justify-content: center;
   height: 100%; color: var(--color-text-muted); text-align: center;

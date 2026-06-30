@@ -447,6 +447,19 @@
     });
   }
 
+  /* ── Exportar a Excel ───────────────────────────────────── */
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const table = document.getElementById('pivot-table');
+    const wb    = XLSX.utils.table_to_book(table, { sheet: 'Tabla' });
+
+    // Nombre de archivo con fecha
+    const now  = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const rows = state.zones.rows.map(i => i.name).join('_') || 'tabla';
+    XLSX.writeFile(wb, `${rows}_${date}.xlsx`);
+  });
+
   /* ── Utilidades ─────────────────────────────────────────── */
 
   function getAllUsedNames() {
