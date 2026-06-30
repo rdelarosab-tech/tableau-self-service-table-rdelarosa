@@ -50,9 +50,10 @@
       <!-- Tab: Campos -->
       <div id="tab-fields" class="config-panel-body">
         <div class="worksheet-selector">
-          <label for="worksheet-select">Worksheet:</label>
-          <select id="worksheet-select"></select>
+          <label for="worksheet-select">Datasource (vía worksheet):</label>
+          <select id="worksheet-select" title="Selecciona cualquier worksheet conectado al datasource. No necesita tener todas las columnas."></select>
         </div>
+        <p class="col-hint" style="margin-top:-6px">Cualquier worksheet del dashboard sirve. Los campos se leen directamente del datasource.</p>
         <div id="config-loading-msg" class="loading-msg">Cargando campos...</div>
         <div id="config-error-msg" class="error-msg" style="display:none"></div>
         <div id="config-fields-panel" style="display:none">

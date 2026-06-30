@@ -111,11 +111,16 @@
       }
 
       const ws = worksheets.find(w => w.name === wsSelect.value) || worksheets[0];
-      const summary = await ws.getSummaryDataAsync({ maxRows: 1, ignoreAliases: false });
-      const fields = summary.columns.map(c => ({
-        name:     c.fieldName,
-        dataType: inferType(summary.data[0] ? summary.data[0][summary.columns.indexOf(c)] : null),
-      }));
+
+      // Obtener datasource directamente — no necesitamos que el worksheet tenga todos los campos
+      const datasources = await ws.getDataSourcesAsync();
+      if (!datasources.length) throw new Error('No hay datasources conectados a este worksheet.');
+      const ds = datasources[0];
+
+      // datasource.fields es una propiedad síncrona con todos los campos del datasource
+      const fields = ds.fields
+        .filter(f => !f.isHidden)
+        .map(f => ({ name: f.name, dataType: f.dataType, role: f.role }));
 
       const savedDims    = JSON.parse(tableau.extensions.settings.get('dimensions') || '[]');
       const savedMetrics = JSON.parse(tableau.extensions.settings.get('metrics')    || '[]');
@@ -133,28 +138,23 @@
     }
   }
 
-  function inferType(cell) {
-    if (!cell) return 'string';
-    return typeof cell.value === 'number' ? 'float' : 'string';
-  }
-
   function renderConfigFieldLists(fields, savedDims, savedMetrics) {
-    const NUMERIC = new Set(['float', 'integer', 'real']);
     const dimList    = document.getElementById('dimensions-list');
     const metricList = document.getElementById('metrics-list');
     dimList.innerHTML = '';
     metricList.innerHTML = '';
 
     fields.forEach(field => {
-      const isNumeric  = NUMERIC.has(field.dataType);
+      const isMeasure  = field.role === 'measure';
       const inDims     = savedDims.includes(field.name);
       const inMetrics  = savedMetrics.includes(field.name);
       const safeId     = field.name.replace(/[^a-zA-Z0-9]/g, '_');
 
+      // Auto-sugerir clasificación según el rol del campo en Tableau
       dimList.appendChild(buildConfigFieldItem(field, 'dim_' + safeId,
-        inDims || (!inDims && !inMetrics && !isNumeric)));
+        inDims || (!inDims && !inMetrics && !isMeasure)));
       metricList.appendChild(buildConfigFieldItem(field, 'met_' + safeId,
-        inMetrics || (!inDims && !inMetrics && isNumeric)));
+        inMetrics || (!inDims && !inMetrics && isMeasure)));
     });
   }
 
@@ -500,25 +500,41 @@
     showState('loading');
 
     try {
-      const summaryData = await state.worksheet.getSummaryDataAsync({ maxRows: 0, ignoreAliases: false });
-      showState('main');
+      // Acceder al datasource directamente — solo se piden las columnas seleccionadas
+      const datasources = await state.worksheet.getDataSourcesAsync();
+      if (!datasources.length) throw new Error('No hay datasources conectados.');
+      const ds = datasources[0];
 
-      const columns = summaryData.columns;
-      const rows    = summaryData.data;
+      // Construir mapa nombre → id para localizar los campos
+      const fieldMap = new Map(ds.fields.map(f => [f.name, f.id]));
 
-      // Mapear nombres de columna → índice
-      const colIndex = {};
-      columns.forEach((c, i) => { colIndex[c.fieldName] = i; });
-
-      // Campos requeridos deben existir en los datos
       const allRequired = [...rowDims, ...(colDim ? [colDim] : []), ...metrics];
-      const missing = allRequired.filter(f => colIndex[f] === undefined);
+      const missing     = allRequired.filter(n => !fieldMap.has(n));
       if (missing.length) {
-        showState('error', `Campos no encontrados en los datos: ${missing.join(', ')}. ¿Está el worksheet correcto seleccionado?`);
+        showState('error', `Campos no encontrados en el datasource: ${missing.join(', ')}. Reconfigura la extensión.`);
         return;
       }
 
-      const pivotData = buildPivot(rows, colIndex, rowDims, colDim, metrics);
+      // Obtener la tabla lógica del datasource
+      const tables = await ds.getLogicalTablesAsync();
+      if (!tables.length) throw new Error('No se encontraron tablas en el datasource.');
+      const tableId = tables[0].id;
+
+      // Pedir SOLO las columnas que el usuario ha seleccionado
+      const columnIds = allRequired.map(n => fieldMap.get(n));
+      const dataTable = await ds.getUnderlyingTableDataAsync(tableId, {
+        maxRows:              0,      // sin límite
+        ignoreAliases:        false,
+        includeAllColumns:    false,
+        columnsToIncludeById: columnIds,
+      });
+
+      showState('main');
+
+      const colIndex = {};
+      dataTable.columns.forEach((c, i) => { colIndex[c.fieldName] = i; });
+
+      const pivotData = buildPivot(dataTable.data, colIndex, rowDims, colDim, metrics);
       state.lastPivot = { pivotData, rowDims, colDim, metrics };
       renderPivotTable(pivotData, rowDims, colDim, metrics, state.showRowTotals, state.showColTotals);
       makeColumnsResizable(document.getElementById('pivot-table'));
@@ -972,7 +988,7 @@
       document.getElementById('state-' + s).style.display = 'none';
     });
     // 'main' ocupa todo el espacio con flex column; las demás son pantallas centradas
-    document.getElementById('state-' + name).style.display = name === 'main' ? 'block' : 'flex';
+    document.getElementById('state-' + name).style.display = 'flex';
     if (name === 'error' && errorMsg) {
       document.getElementById('error-msg').textContent = errorMsg;
     }
