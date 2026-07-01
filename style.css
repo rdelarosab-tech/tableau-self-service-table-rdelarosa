@@ -70,7 +70,8 @@ html, body { height: 100%; font-family: var(--font); font-size: 13px; color: var
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ─── Main layout ───────────────────────────────────────────── */
-.main-layout { display: flex; flex: 1; overflow: hidden; }
+#state-main { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.main-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 
 /* Sidebar */
 .sidebar {
@@ -86,7 +87,7 @@ html, body { height: 100%; font-family: var(--font); font-size: 13px; color: var
 .chip-list { display: flex; flex-direction: column; gap: 4px; min-height: 24px; }
 
 /* Content area */
-.content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.content-area { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* ─── Drop zones ────────────────────────────────────────────── */
 .drop-zones {
@@ -141,7 +142,7 @@ html, body { height: 100%; font-family: var(--font); font-size: 13px; color: var
 .chip .chip-remove:hover { background: rgba(0,0,0,.2); }
 
 /* ─── Table area ────────────────────────────────────────────── */
-.table-area { flex: 1; overflow: auto; padding: 14px; }
+.table-area { flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto; padding: 14px; }
 
 .table-toolbar {
   display: flex; justify-content: flex-end;
@@ -154,7 +155,7 @@ html, body { height: 100%; font-family: var(--font); font-size: 13px; color: var
 }
 .table-placeholder p { max-width: 280px; line-height: 1.6; }
 
-.table-wrapper { overflow: auto; max-height: 100%; }
+.table-wrapper { overflow: visible; }
 
 .pivot-table {
   border-collapse: collapse; width: 100%; font-size: 12px;
