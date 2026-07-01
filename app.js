@@ -462,6 +462,107 @@
   // Clic fuera de chips/zonas → deseleccionar
   document.addEventListener('click', clearSelection);
 
+  /* ── Reordenar chips en zonas por arrastre (pointer events) ─── */
+  (function initZoneReorder() {
+    let drag = null;
+    let lastWasDrag = false;
+
+    document.addEventListener('pointerdown', e => {
+      const chip = e.target.closest('.chip');
+      if (!chip || chip.dataset.fromZone === 'sidebar' || !chip.dataset.fromZone) return;
+      if (e.target.closest('button')) return;
+      const rect = chip.getBoundingClientRect();
+      drag = {
+        chip, zone: chip.dataset.fromZone, name: chip.dataset.name,
+        startX: e.clientX, startY: e.clientY,
+        ox: e.clientX - rect.left, oy: e.clientY - rect.top,
+        ghost: null, moved: false,
+      };
+    });
+
+    document.addEventListener('pointermove', e => {
+      if (!drag) return;
+      if (!drag.moved) {
+        if (Math.abs(e.clientX - drag.startX) < 5 && Math.abs(e.clientY - drag.startY) < 5) return;
+        drag.moved = true;
+        const rect = drag.chip.getBoundingClientRect();
+        const g = drag.chip.cloneNode(true);
+        g.id = 'drag-ghost';
+        g.style.cssText = `position:fixed;pointer-events:none;opacity:.8;z-index:9999;top:${rect.top}px;left:${rect.left}px;margin:0;transform:scale(1.06);box-shadow:0 4px 12px rgba(0,0,0,.2);transition:none;`;
+        document.body.appendChild(g);
+        drag.ghost = g;
+        drag.chip.style.opacity = '.25';
+      }
+      drag.ghost.style.top  = (e.clientY - drag.oy) + 'px';
+      drag.ghost.style.left = (e.clientX - drag.ox) + 'px';
+      updateDropIndicator(e.clientX, drag.zone);
+    });
+
+    document.addEventListener('pointerup', e => {
+      if (!drag) return;
+      if (drag.moved) {
+        lastWasDrag = true;
+        const zone = drag.zone;
+        const arr  = state.zones[zone];
+        const zoneEl  = document.getElementById('zone-' + zone);
+        const chipEls = Array.from(zoneEl.querySelectorAll('.chip')).filter(c => c !== drag.chip);
+
+        // Encontrar el chip antes del cual insertar (por nombre, evita problemas de índice)
+        let insertBeforeName = null;
+        for (const c of chipEls) {
+          const cr = c.getBoundingClientRect();
+          if (e.clientX < cr.left + cr.width / 2) { insertBeforeName = c.dataset.name; break; }
+        }
+
+        const fromIdx = arr.findIndex(i => i.name === drag.name);
+        const [item]  = arr.splice(fromIdx, 1);
+        if (insertBeforeName) {
+          const toIdx = arr.findIndex(i => i.name === insertBeforeName);
+          arr.splice(toIdx, 0, item);
+        } else {
+          arr.push(item);
+        }
+        cleanup(); refresh();
+      } else {
+        cleanup();
+      }
+      drag = null;
+    });
+
+    document.addEventListener('pointercancel', () => { if (drag) { cleanup(); drag = null; } });
+
+    function cleanup() {
+      if (drag?.ghost) drag.ghost.remove();
+      if (drag?.chip)  drag.chip.style.opacity = '';
+      removeDropIndicator();
+    }
+
+    function updateDropIndicator(x, zone) {
+      removeDropIndicator();
+      const zoneEl  = document.getElementById('zone-' + zone);
+      const chipEls = Array.from(zoneEl.querySelectorAll('.chip')).filter(c => c !== drag?.chip);
+      const el = document.createElement('div');
+      el.id = 'drop-indicator';
+      el.style.cssText = 'width:2px;min-height:24px;background:var(--color-primary);border-radius:2px;align-self:center;pointer-events:none;flex-shrink:0;';
+      let ref = null;
+      for (const c of chipEls) {
+        const cr = c.getBoundingClientRect();
+        if (x < cr.left + cr.width / 2) { ref = c; break; }
+      }
+      if (ref) zoneEl.insertBefore(el, ref); else zoneEl.appendChild(el);
+    }
+
+    function removeDropIndicator() {
+      const el = document.getElementById('drop-indicator');
+      if (el) el.remove();
+    }
+
+    // Suprimir el click que dispara el navegador justo después de soltar el drag
+    document.addEventListener('click', e => {
+      if (lastWasDrag) { lastWasDrag = false; e.stopPropagation(); }
+    }, { capture: true });
+  })();
+
   /* ── Botón reset ────────────────────────────────────────── */
 
   document.getElementById('btn-reset').addEventListener('click', () => {
