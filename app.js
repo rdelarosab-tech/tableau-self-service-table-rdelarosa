@@ -22,20 +22,23 @@
   };
 
   const state = {
-    worksheet:  null,
-    dimensions: [],
-    metrics:    [],
+    worksheet:   null,
+    dimensions:  [],
+    metrics:     [],
     zones: { rows: [], columns: [], metrics: [] },
-    selected:   null,
-    lastPivot:  null,
+    selected:    null,
+    lastPivot:   null,
     showRowTotals: true,
     showColTotals: true,
-    style: { ...STYLE_DEFAULTS },
+    style:       { ...STYLE_DEFAULTS },
+    isAuthoring: false,   // true solo en modo edición del dashboard
   };
 
   /* ── Inicialización ─────────────────────────────────────── */
 
   tableau.extensions.initializeAsync({ configure: openConfigPanel }).then(() => {
+    state.isAuthoring = tableau.extensions.environment.mode === 'authoring';
+    document.getElementById('btn-config').style.display = state.isAuthoring ? '' : 'none';
     loadConfiguration();
   }).catch(err => showState('error', 'Error al inicializar la extensión: ' + err.message));
 
@@ -67,6 +70,7 @@
   });
 
   function openConfigPanel() {
+    if (!state.isAuthoring) return;
     const panel = document.getElementById('config-panel');
     panel.style.display = 'flex';
     syncInputsFromStyle();
@@ -282,7 +286,7 @@
 
     if (!dims.length && !metrics.length) {
       showState('unconfigured');
-      openConfigPanel();
+      if (state.isAuthoring) openConfigPanel();
       return;
     }
 
